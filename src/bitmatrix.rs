@@ -1,4 +1,4 @@
-use crate::bitvec::*;
+use crate::bitvec::{min_blocks, BitBlock, BitSlice, BitVec, BLOCKSIZE, MSB_ON};
 use rand::Rng;
 use std::{
     fmt,
@@ -352,17 +352,29 @@ impl BitMatrix {
         self.clone().gauss_helper(false, &mut ()).len()
     }
 
+    /// Computes the nullity of the matrix using gaussian elimination
+    #[inline]
+    pub fn nullity(&self) -> usize {
+        self.cols() - self.rank()
+    }
+
     /// Computes the inverse of an invertible matrix
+    /// # Panics
+    ///
+    /// Panics if the matrix is not invertible either through
+    /// not being square or by having less than full rank
     pub fn inverse(&self) -> Self {
-        if self.rows() != self.cols() {
-            panic!("Matrix must be square");
-        }
+        assert_eq!(self.rows(), self.cols(), "Matrix must be square");
         let mut inv = BitMatrix::identity(self.cols());
         let pcols = self.clone().gauss_helper(true, &mut inv);
 
-        if pcols.len() != self.cols() {
-            panic!("Matrix is not invertible");
-        }
+        assert_eq!(
+            pcols.len(),
+            self.cols(),
+            "Matrix is not invertible. It has rank {} < {}",
+            pcols.len(),
+            self.cols()
+        );
 
         inv
     }
@@ -370,10 +382,15 @@ impl BitMatrix {
     /// Vertically stacks this matrix with another one and returns the result
     ///
     /// The resulting matrix will have the minimal column padding.
+    /// # Panics
+    ///
+    /// Panics if the number of logical columns do not match
     pub fn vstack(&self, other: &Self) -> Self {
-        if self.cols() != other.cols() {
-            panic!("Cannot vertically stack matrices with different number of columns");
-        }
+        assert_eq!(
+            self.cols(),
+            other.cols(),
+            "Cannot vertically stack matrices with different number of columns"
+        );
 
         let rows = self.rows() + other.rows();
         let mut data = BitVec::with_capacity(rows * self.col_blocks);
@@ -392,14 +409,14 @@ impl BitMatrix {
         BitMatrix {
             rows,
             cols: self.cols(),
-            col_blocks: col_blocks,
+            col_blocks,
             data,
         }
     }
 }
 
 /// Two matrices are considered equal if they represent the same logical matrix, possibly with different
-/// padding (i.e. col_blocks and row_blocks can be different)
+/// padding (i.e. `col_blocks` and `row_blocks` can be different)
 impl PartialEq for BitMatrix {
     fn eq(&self, other: &Self) -> bool {
         if self.rows() != other.rows() || self.cols() != other.cols() {
@@ -453,7 +470,7 @@ impl RowOps for BitMatrix {
     }
 }
 
-/// Allows indexing into the matrix to return the bit at `(row, col)
+/// Allows indexing into the matrix to return the bit at `(row, col)`
 ///
 /// `matrix[(row, col)]` is equivalent to `matrix.bit(row, col)`. Note this differs from how indexing works for [`BitVec`], which indexes
 /// over [`BitBlock`]s, not individual bits.
@@ -477,6 +494,7 @@ impl fmt::Display for BitMatrix {
     /// Formats the matrix for display.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..self.rows {
+            #[allow(clippy::bool_to_int_with_if)]
             for j in 0..self.cols {
                 write!(f, " {} ", if self[(i, j)] { 1 } else { 0 })?;
             }
@@ -491,16 +509,15 @@ impl Mul for &BitMatrix {
     type Output = BitMatrix;
     /// Multiplies two matrices.
     fn mul(self, rhs: Self) -> Self::Output {
-        if self.cols != rhs.rows {
-            panic!(
-                "Attempting to multiply matrices of incompatible dimensions: {} != {}",
-                self.cols, rhs.rows
-            );
-        }
-        let mut res = BitMatrix::zeros(self.rows, rhs.cols);
+        assert_eq!(
+            self.cols, rhs.rows,
+            "Attempting to multiply matrices of incompatible dimensions: {} != {}",
+            self.cols, rhs.rows
+        );
+        let mut result = BitMatrix::zeros(self.rows, rhs.cols);
 
         for i in 0..self.rows {
-            let row = res.row_mut(i);
+            let row = result.row_mut(i);
             self.row(i).iter().enumerate().for_each(|(j, b)| {
                 if b {
                     *row ^= rhs.row(j);
@@ -508,7 +525,7 @@ impl Mul for &BitMatrix {
             });
         }
 
-        res
+        result
     }
 }
 
@@ -530,9 +547,9 @@ mod test {
             BitBlock::MAX.wrapping_shl((BLOCKSIZE - (m.cols % BLOCKSIZE)) as u32)
         );
 
-        println!("{}", m);
+        println!("{m}");
         m.gauss(true);
-        println!("{}", m);
+        println!("{m}");
     }
 
     #[test]

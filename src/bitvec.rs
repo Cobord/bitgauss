@@ -10,10 +10,10 @@ pub type BitBlock = u64;
 pub const BLOCKSIZE: usize = 64;
 
 /// Bitwise AND with this constant to set most signficant bit to zero
-pub const MSB_OFF: BitBlock = 0x7fffffffffffffff;
+pub const MSB_OFF: BitBlock = 0x7fff_ffff_ffff_ffff;
 
 /// Bitwise OR with this constant to set most signficant bit to one
-pub const MSB_ON: BitBlock = 0x8000000000000000;
+pub const MSB_ON: BitBlock = 0x8000_0000_0000_0000;
 
 /// Returns the minimum number of [`BitBlock`]s required to store the given number of bits.
 ///
@@ -26,6 +26,7 @@ pub const MSB_ON: BitBlock = 0x8000000000000000;
 /// The minimum number of [`BitBlock`]s (each of size [`BLOCKSIZE`]) needed to store `bits` bits.
 /// If `bits` is not a multiple of [`BLOCKSIZE`], the result is rounded up to ensure all bits fit.
 #[inline]
+#[allow(clippy::bool_to_int_with_if)]
 pub fn min_blocks(bits: usize) -> usize {
     bits / BLOCKSIZE + if bits % BLOCKSIZE == 0 { 0 } else { 1 }
 }
@@ -70,7 +71,7 @@ pub struct BitIter<'a> {
     c: usize,
     block: BitBlock,
 }
-impl<'a> Iterator for BitIter<'a> {
+impl Iterator for BitIter<'_> {
     type Item = bool;
     fn next(&mut self) -> Option<Self::Item> {
         if self.c == BLOCKSIZE {
@@ -127,7 +128,7 @@ impl BitSlice {
         self.block_iter().fold(0, |c, bits| c + bits.count_zeros())
     }
 
-    /// Computes the dot product (mod 2) of two [`BitSlice`]s.
+    /// Computes the dot product `(mod 2)` of two [`BitSlice`]s.
     ///
     /// Returns `true` if the number of matching 1s is odd, otherwise `false`.
     #[inline]
@@ -186,6 +187,7 @@ impl BitSlice {
     /// # Returns
     ///
     /// `Some(bit_index)` if a 1-bit is found, otherwise `None`.
+    /// where the 0 for `bit_index` is the start of the `from` block not the start of `self`
     pub fn first_one_in_range(&self, from: usize, to: usize) -> Option<usize> {
         for i in from..to {
             if self.0[i] != 0 {
@@ -196,6 +198,8 @@ impl BitSlice {
     }
 
     /// Performs an XOR operation between source and target ranges.
+    /// If `source + len > target` and `source <= target`, then this may have
+    /// unexpected behavior. Assume there is no such overlap of the ranges.
     pub fn xor_range(&mut self, source: usize, target: usize, len: usize) {
         for i in 0..len {
             self.0[target + i] ^= self.0[source + i];
@@ -221,6 +225,7 @@ impl BitSlice {
     }
 
     /// Swaps ranges of bit blocks.
+    /// For use when the ranges are disjoint
     #[inline]
     pub fn swap_range(&mut self, source: usize, target: usize, len: usize) {
         for i in 0..len {
@@ -304,7 +309,7 @@ impl BitVec {
     /// Sets the bit at the given index to the provided value.
     #[inline]
     pub fn set_bit(&mut self, index: usize, value: bool) {
-        self.deref_mut().set_bit(index, value)
+        self.deref_mut().set_bit(index, value);
     }
 
     /// Returns an iterator over all bits in this vector as `bool`s.
@@ -386,8 +391,8 @@ impl BitVec {
 
 impl fmt::Display for BitVec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for &bits in self.0.iter() {
-            write!(f, "{:064b}", bits)?;
+        for &bits in &self.0 {
+            write!(f, "{bits:064b}")?;
         }
         Ok(())
     }
@@ -472,7 +477,7 @@ impl DerefMut for BitVec {
 
 impl From<Vec<bool>> for BitVec {
     fn from(value: Vec<bool>) -> Self {
-        BitVec::from_iter(value.iter().copied())
+        value.iter().copied().collect()
     }
 }
 

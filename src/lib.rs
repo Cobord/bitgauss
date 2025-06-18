@@ -11,7 +11,14 @@
 //! - [`BitMatrix`]: a two-dimensional matrix based on `BitVec`, which implements
 //!   basic linear algebraic operations
 
-#[allow(clippy::needless_range_loop, clippy::suspicious_arithmetic_impl)]
+#![allow(
+    clippy::needless_range_loop,
+    clippy::suspicious_arithmetic_impl,
+    clippy::must_use_candidate,
+    clippy::cast_possible_truncation,
+    clippy::iter_without_into_iter,
+    clippy::return_self_not_must_use
+)]
 pub mod bitmatrix;
 pub mod bitvec;
 
